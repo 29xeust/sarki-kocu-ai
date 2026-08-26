@@ -1,5 +1,6 @@
 fastapi
 uvicorn
+google-generativeai
 librosa
 numpy
 requests

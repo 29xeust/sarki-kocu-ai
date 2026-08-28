@@ -170,7 +170,7 @@ async def anasayfa():
 
             .download-btn { background: #03dac6; color: #121212; width: auto; padding: 10px 20px; font-size: 14px; margin-top: 0; display: inline-block; text-align: center; text-decoration: none; border-radius: 6px; font-weight: bold; }
             .download-btn:hover { background: #02b8a6; }
-            .loading { text-align: center; color: #ffb74d; display: none; font-weight: bold; margin-top: 15px; }
+            .loading { text-align: center; color: #ffb74d; display: none; font-weight: bold; margin-top: 15px; font-size: 1.05em; }
         </style>
     </head>
     <body>
@@ -211,7 +211,7 @@ async def anasayfa():
                 
                 <button type="submit" id="submitBtn">Linkleri Oku, Tonu Çöz ve Koçluğu Başlat</button>
             </form>
-            <div id="loading" class="loading">Web linkleri okunuyor, ses analizleri yapılıyor ve yapay zeka rapor hazırlıyor...</div>
+            <div id="loading" class="loading">⏳ [1/4] Ses dosyası sunucuya yükleniyor...</div>
         </div>
 
         <div id="history-section" class="history-card" style="display:none;">
@@ -267,6 +267,25 @@ async def anasayfa():
                 resultsContainer.style.display = 'none';
                 sonucDiv.innerText = '';
 
+                // --- ADIM ADIM İLERLEME MESAJLARI ---
+                const adimlar = [
+                    "⏳ [1/4] Ses dosyası sunucuya yükleniyor...",
+                    "🎵 [2/4] Librosa ile frekans, BPM ve Ton analizi yapılıyor...",
+                    "🧠 [3/4] Yapay zeka kılavuzları okuyor ve önerileri hazırlıyor...",
+                    "✨ [4/4] Rapor tamamlanmak üzere, son dokunuşlar yapılıyor..."
+                ];
+                
+                let adimIndex = 0;
+                loading.innerText = adimlar[0];
+
+                // Her 8 saniyede bir ekrandaki yazıyı sıradaki adıma geçir
+                const loadingInterval = setInterval(() => {
+                    adimIndex++;
+                    if (adimIndex < adimlar.length) {
+                        loading.innerText = adimlar[adimIndex];
+                    }
+                }, 8000);
+
                 const formData = new FormData();
                 formData.append('versiyon_adi', document.getElementById('versiyon_adi').value);
                 formData.append('parca_detaylari', document.getElementById('parca_detaylari').value);
@@ -294,6 +313,10 @@ async def anasayfa():
                         method: 'POST',
                         body: formData
                     });
+
+                    // İşlem bitince sayacı durdur
+                    clearInterval(loadingInterval);
+
                     const data = await response.json();
                     
                     loading.style.display = 'none';
@@ -329,6 +352,7 @@ async def anasayfa():
                         sonucDiv.innerText = "Hata: " + JSON.stringify(data, null, 2);
                     }
                 } catch (err) {
+                    clearInterval(loadingInterval);
                     loading.style.display = 'none';
                     btn.disabled = false;
                     btn.innerText = "Linkleri Oku, Tonu Çöz ve Koçluğu Başlat";
@@ -451,7 +475,7 @@ async def analyze_mix(
                             os.remove(gecici_yol)
 
         response = client.models.generate_content(
-            model="gemini-3.5-flash-lite",
+            model="gemini-2.5-flash",
             contents=icerik_listesi,
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,

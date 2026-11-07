@@ -1,5 +1,5 @@
 import os
-import uuid  # <-- BENZERSIZ DOSYA ISIMLERI ICIN EKLENDI
+import uuid
 import librosa
 import numpy as np
 import requests
@@ -24,12 +24,11 @@ def urlden_metin_cek(url):
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # Gereksiz etiketleri temizle
             for script in soup(["script", "style", "nav", "footer", "header"]):
                 script.extract()
                 
             metin = soup.get_text(separator=' ', strip=True)
-            return metin[:15000] # Çok uzun sayfalarda token sınırını korumak için sınır koyuyoruz
+            return metin[:15000]
     except Exception as e:
         return f"[Link Okuma Hatası ({url}): {str(e)}]"
     return ""
@@ -37,7 +36,6 @@ def urlden_metin_cek(url):
 def referanslari_oku(ek_linkler=None):
     toplam_icerik = ""
     
-    # 1. Klasördeki Dosyaları Oku (PDF ve TXT)
     if not os.path.exists(REFERANSLAR_KLASORU):
         os.makedirs(REFERANSLAR_KLASORU)
     else:
@@ -61,7 +59,6 @@ def referanslari_oku(ek_linkler=None):
                 except Exception:
                     pass
 
-    # 2. Kullanıcının Eklediği Linkleri Oku
     if ek_linkler:
         link_listesi = [l.strip() for l in ek_linkler.split(",") if l.strip()]
         for link in link_listesi:
@@ -102,7 +99,6 @@ def ton_ve_akor_tahmini(y, sr):
 
 def librosa_ile_sesi_olcutle(dosya_yolu):
     try:
-        # Hızlı ve hafif analiz için sr=16000, mono=True, duration=60
         y, sr = librosa.load(dosya_yolu, sr=16000, mono=True, duration=60)
         
         peak = float(np.max(np.abs(y)))
@@ -300,35 +296,4 @@ async def anasayfa():
                     const kick = document.getElementById('kick_dosyasi').files[0];
                     const bass = document.getElementById('bass_dosyasi').files[0];
                     const vokal = document.getElementById('vokal_dosyasi').files[0];
-                    const enst = document.getElementById('enstruman_dosyasi').files[0];
-
-                    if (kick) formData.append('kick_dosyasi', kick);
-                    if (bass) formData.append('bass_dosyasi', bass);
-                    if (vokal) formData.append('vokal_dosyasi', vokal);
-                    if (enst) formData.append('enstruman_dosyasi', enst);
-                }
-
-                try {
-                    const response = await fetch('/mix-analiz/', {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    clearInterval(loadingInterval);
-
-                    const data = await response.json();
-                    
-                    loading.style.display = 'none';
-                    btn.disabled = false;
-                    btn.innerText = "Linkleri Oku, Tonu Çöz ve Koçluğu Başlat";
-                    resultsContainer.style.display = 'block';
-
-                    if (data.mix_ve_produksiyon_tavsiyeleri) {
-                        sonucDiv.innerText = data.mix_ve_produksiyon_tavsiyeleri;
-
-                        if(data.ses_metrikleri) {
-                            metricsGrid.style.display = 'grid';
-                            document.getElementById('m-ton').innerText = data.ses_metrikleri.tahmini_ton;
-                            document.getElementById('m-bpm').innerText = data.ses_metrikleri.tahmini_bpm + " BPM";
-                            document.getElementById('m-peak').innerText = data.ses_metrikleri.peak_db + " dB";
-                            document.getElementById('m-rms').innerText = data.ses_metrikleri.rms_db
+                    const enst = document.getElementById('enstruman_dosyasi').files

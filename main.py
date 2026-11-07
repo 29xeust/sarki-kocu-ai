@@ -1,4 +1,5 @@
 import os
+import uuid  # <-- BENZERSIZ DOSYA ISIMLERI ICIN EKLENDI
 import librosa
 import numpy as np
 import requests
@@ -101,7 +102,8 @@ def ton_ve_akor_tahmini(y, sr):
 
 def librosa_ile_sesi_olcutle(dosya_yolu):
     try:
-        y, sr = librosa.load(dosya_yolu, sr=None)
+        # Hızlı ve hafif analiz için sr=16000, mono=True, duration=60
+        y, sr = librosa.load(dosya_yolu, sr=16000, mono=True, duration=60)
         
         peak = float(np.max(np.abs(y)))
         peak_db = 20 * np.log10(peak) if peak > 0 else -100
@@ -267,7 +269,6 @@ async def anasayfa():
                 resultsContainer.style.display = 'none';
                 sonucDiv.innerText = '';
 
-                // --- ADIM ADIM İLERLEME MESAJLARI ---
                 const adimlar = [
                     "⏳ [1/4] Ses dosyası sunucuya yükleniyor...",
                     "🎵 [2/4] Librosa ile frekans, BPM ve Ton analizi yapılıyor...",
@@ -278,7 +279,6 @@ async def anasayfa():
                 let adimIndex = 0;
                 loading.innerText = adimlar[0];
 
-                // Her 8 saniyede bir ekrandaki yazıyı sıradaki adıma geçir
                 const loadingInterval = setInterval(() => {
                     adimIndex++;
                     if (adimIndex < adimlar.length) {
@@ -314,7 +314,6 @@ async def anasayfa():
                         body: formData
                     });
 
-                    // İşlem bitince sayacı durdur
                     clearInterval(loadingInterval);
 
                     const data = await response.json();
@@ -332,173 +331,4 @@ async def anasayfa():
                             document.getElementById('m-ton').innerText = data.ses_metrikleri.tahmini_ton;
                             document.getElementById('m-bpm').innerText = data.ses_metrikleri.tahmini_bpm + " BPM";
                             document.getElementById('m-peak').innerText = data.ses_metrikleri.peak_db + " dB";
-                            document.getElementById('m-rms').innerText = data.ses_metrikleri.rms_db + " dB";
-                        } else {
-                            metricsGrid.style.display = 'none';
-                        }
-
-                        if(data.gecmis_ozeti) {
-                            historySection.style.display = 'block';
-                            historyList.innerHTML = '';
-                            data.gecmis_ozeti.forEach(item => {
-                                historyList.innerHTML += `<div class="history-item"><span><b>${item.ad}</b></span><span>Ton: ${item.ton} | BPM: ${item.bpm}</span></div>`;
-                            });
-                        }
-
-                        const blob = new Blob([data.mix_ve_produksiyon_tavsiyeleri], { type: 'text/plain;charset=utf-8' });
-                        downloadLink.href = URL.createObjectURL(blob);
-                        downloadLink.style.display = 'inline-block';
-                    } else {
-                        sonucDiv.innerText = "Hata: " + JSON.stringify(data, null, 2);
-                    }
-                } catch (err) {
-                    clearInterval(loadingInterval);
-                    loading.style.display = 'none';
-                    btn.disabled = false;
-                    btn.innerText = "Linkleri Oku, Tonu Çöz ve Koçluğu Başlat";
-                    resultsContainer.style.display = 'block';
-                    sonucDiv.innerText = "Bağlantı hatası oluştu: " + err;
-                }
-            };
-        </script>
-    </body>
-    </html>
-    """
-
-@app.post("/mix-analiz/")
-async def analyze_mix(
-    versiyon_adi: str = Form("Versiyon 1"),
-    parca_detaylari: str = Form(...),
-    referans_linkler: str = Form(""),
-    analysis_mode: str = Form("single"),
-    ses_dosyasi: UploadFile = File(None),
-    kick_dosyasi: UploadFile = File(None),
-    bass_dosyasi: UploadFile = File(None),
-    vokal_dosyasi: UploadFile = File(None),
-    enstruman_dosyasi: UploadFile = File(None)
-):
-    try:
-        otomatik_referanslar = referanslari_oku(referans_linkler)
-        icerik_listesi = []
-        librosa_sonuclar = None
-
-        system_instruction = """
-        Sen profesyonel bir kıdemli ses mühendisi, aranjör ve müzik prodüktörüsün. Sana yüklenen ses dosyasının 
-        Librosa ile otomatik tespit edilen tonu (Key/Mode), temposu (BPM) ve ses seviyesi (Peak/RMS) verilecek.
-        Ayrıca kullanıcı tarafından sağlanan harici web kılavuzları (linkler) ve yerel belgeler referans alınacaktır.
-        Tavsiyelerini bu somut verilere, ton merkezine ve web'den çekilen kılavuzlara dayandırarak ver. ÖNEMLİ KURAL: Kullanıcının sorusu ne olursa olsun, cevabının en sonunda MUTLAKA o konuya veya tarza uygun 2-3 adet gerçek referans şarkı/parça önerisinde bulun. Referans parça önermeyi asla unutma. 
-        Asla düz paragraf yazma; net başlıklar ve maddeler kullan.
-        """
-
-        gecmis_metni = "Daha önceki yüklenen versiyon yok."
-        if VERSIYON_GECMISI:
-            gecmis_metni = "Önceki Versiyonlar:\n" + "\n".join([f"- {v['ad']} (Ton: {v['ton']}, BPM: {v['bpm']})" for v in VERSIYON_GECMISI])
-
-        librosa_bilgi_metni = ""
-        if analysis_mode == "single" and ses_dosyasi:
-            gecici_yol = "gecici_master_link.mp3"
-            try:
-                icerik_bytes = await ses_dosyasi.read()
-                with open(gecici_yol, "wb") as f:
-                    f.write(icerik_bytes)
-                
-                librosa_sonuclar = librosa_ile_sesi_olcutle(gecici_yol)
-                if "hata" not in librosa_sonuclar:
-                    librosa_bilgi_metni = f"""
-                    [PYTHON / LIBROSA TONA VE SES VERİLERİ]:
-                    - Tespit Edilen Ton / Mod: {librosa_sonuclar['tahmini_ton']}
-                    - Tespit Edilen Tempo: {librosa_sonuclar['tahmini_bpm']} BPM
-                    - Tepe Noktası (Peak): {librosa_sonuclar['peak_db']} dB
-                    - Ortalama Enerji (RMS): {librosa_sonuclar['rms_db']} dB
-                    """
-                
-                uploaded_file = client.files.upload(file=gecici_yol)
-                icerik_listesi.append("[Master Şarkı Dosyası]:")
-                icerik_listesi.append(uploaded_file)
-            finally:
-                if os.path.exists(gecici_yol):
-                    os.remove(gecici_yol)
-
-        prompt = f"""
-        [OTOMATİK KILAVUZLAR VE WEB LİNKLERİ]:
-        {otomatik_referanslar}
-
-        {librosa_bilgi_metni}
-
-        [PROJE GEÇMİŞİ]:
-        {gecmis_metni}
-
-        [KULLANICI TALEBİ / HEDEFİ]:
-        Versiyon: {versiyon_adi}
-        Not: {parca_detaylari}
-
-        Lütfen yukarıdaki verileri, web linklerinden gelen bilgileri ve ton bilgisini kullanarak şu başlıklarla profesyonel rapor oluştur:
-
-        ### 🎵 Tonal ve Teknik Analiz Özeti
-        - (Tespit edilen ton, tempo ve genel karakter üzerine değerlendirme)
-
-        ### 🎹 1. Akor Yürüyüşü ve Melodi Fikirleri
-        - (Tespit edilen tona, tarza ve kılavuzlara uygun olarak yeni melodi ve akor önerileri)
-
-        ### 🎛️ 2. Mix ve Frekans Dengeleme Tavsiyeleri
-        - ...
-
-        ### 📉 3. Dinamik ve Alan Kontrolü
-        - ...
-
-        ### 🚀 4. Hemen Uygulanacak 3 Kritik Adım
-        1. ...
-        2. ...
-        3. ...
-        """
-        icerik_listesi.append(prompt)
-
-        if analysis_mode == "multi":
-            dosyalar = {
-                "Kick Stem": kick_dosyasi,
-                "Bass Stem": bass_dosyasi,
-                "Vokal Stem": vokal_dosyasi,
-                "Enstrüman Stem": enstruman_dosyasi
-            }
-            for isim, dosya in dosyalar.items():
-                if dosya:
-                    gecici_yol = f"gecici_{isim.lower().replace(' ', '_')}.mp3"
-                    try:
-                        icerik_bytes = await dosya.read()
-                        with open(gecici_yol, "wb") as f:
-                            f.write(icerik_bytes)
-                        uploaded_stem = client.files.upload(file=gecici_yol)
-                        icerik_listesi.append(f"[{isim} Analizi]:")
-                        icerik_listesi.append(uploaded_stem)
-                    finally:
-                        if os.path.exists(gecici_yol):
-                            os.remove(gecici_yol)
-
-        response = client.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=icerik_listesi,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                temperature=0.5,
-            ),
-        )
-
-        yeni_gecmis_kaydi = {
-            "ad": versiyon_adi,
-            "ton": librosa_sonuclar['tahmini_ton'] if librosa_sonuclar and "hata" not in librosa_sonuclar else "N/A",
-            "bpm": librosa_sonuclar['tahmini_bpm'] if librosa_sonuclar and "hata" not in librosa_sonuclar else "N/A"
-        }
-        VERSIYON_GECMISI.append(yeni_gecmis_kaydi)
-
-        return {
-            "mix_ve_produksiyon_tavsiyeleri": response.text,
-            "ses_metrikleri": librosa_sonuclar if (librosa_sonuclar and "hata" not in librosa_sonuclar) else None,
-            "gecmis_ozeti": VERSIYON_GECMISI
-        }
-
-    except Exception as genel_hata:
-        return {"hata_detayi": f"API veya Sunucu Hatası: {str(genel_hata)}"}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+                            document.getElementById('m-rms').innerText = data.ses_metrikleri.rms_db
